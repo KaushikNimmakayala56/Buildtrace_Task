@@ -1,0 +1,82 @@
+# BuildTrace Assignment - Complete Requirements
+
+## Core Requirements
+
+### 1. Ingest and Store Input Data
+- JSON files with geometric objects (id, type, x, y, width, height)
+- Detect added/removed/moved objects
+- Generate natural-language summary
+- Output format: {added, removed, moved, summary}
+
+### 2. Process at Scale
+- Handle thousands of version pairs concurrently
+- Horizontally scalable architecture (Cloud Run, Pub/Sub)
+- Resume/retry failed tasks safely
+
+### 3. Perform Analytics
+- Total added/removed/moved elements per hour
+- P95/P99 processing latency for change-detection jobs
+- Percentage of drawings with missing or corrupted data
+- API endpoint with metrics
+
+### 4. Detect Anomalies
+- Flag missing or delayed diagram uploads
+- Detect sudden spikes (e.g., 10× increase in added objects)
+- Return as part of health/alert endpoint
+
+## Required Endpoints
+
+1. POST /process
+   - Accept list of version pairs or Cloud Storage path
+   - Enqueue jobs to Pub/Sub
+
+2. GET /changes?drawing_id=...
+   - Retrieve detected changes for a specific drawing
+
+3. GET /metrics
+   - Return latency (p50, p95, p99) and volume summaries
+   - Total added/removed/moved counts
+
+4. GET /health
+   - Return missing data warnings
+   - Return anomaly warnings (spikes in changes)
+
+## Deployment Requirements
+
+- Cloud Run for API and workers
+- Pub/Sub for job queueing
+- Cloud Storage for files
+- Dockerfile and deploy scripts
+
+## What to Deliver
+
+1. ✅ Core diff logic (diff.py) - DONE
+2. ✅ Enhanced metrics (p50/p95/p99, totals) - DONE
+3. ✅ GET /changes endpoint - DONE
+4. ✅ GET /health endpoint (anomaly detection) - DONE
+5. ❌ Data simulator script - MISSING
+6. ✅ Cloud Run deployment - DONE (https://buildtrace-worker-512634476753.us-central1.run.app)
+7. ❌ README with:
+   - System architecture diagram/explanation
+   - Scaling strategy
+   - Metrics computation design
+   - Trade-offs
+   - Example cURL commands
+
+## Evaluation Criteria Focus Areas
+
+- System Design: Clear modules, horizontally scalable
+- Data Pipeline: Efficient ingestion, queueing, aggregation
+- Fault Tolerance: Retry handling, missing data detection
+- Metrics & Observability: Latency measurement, anomaly detection
+- Code Quality: Clean, documented, organized
+- Deployment: Working Cloud Run setup
+- Communication: Clear README with design rationale
+
+## Stretch Goals (Optional)
+
+- BigQuery for incremental aggregation
+- Simple UI/dashboard
+- Configurable anomaly thresholds
+- Pub/Sub dead-letter queue
+

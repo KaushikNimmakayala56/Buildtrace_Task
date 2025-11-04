@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+google-cloud-storage
+google-cloud-pubsub
+google-api-core
+tqdm

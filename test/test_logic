@@ -1,0 +1,24 @@
+import json
+import sys
+import re
+from pathlib import Path
+
+# Add parent directory to path so Python can find 'app' module
+parent_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(parent_dir))
+
+from app.diff import diff
+
+def load_json_with_trailing_comma(path):
+    """Load JSON even if it has trailing commas."""
+    with open(path, 'r') as f:
+        content = f.read()
+    # Remove trailing commas before closing brackets/braces
+    content = re.sub(r',(\s*[}\]])', r'\1', content)
+    return json.loads(content)
+
+a = load_json_with_trailing_comma(parent_dir / 'sample/vA.json')
+b = load_json_with_trailing_comma(parent_dir / 'sample/vB.json')
+
+result = diff(a, b)
+print(json.dumps(result, indent=2))
