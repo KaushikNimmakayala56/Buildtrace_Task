@@ -17,8 +17,8 @@ The system processes thousands of drawing pairs concurrently using Cloud Run wor
 
 **Deploy:**
 ```bash
-export PROJECT_ID=your-project-id
-export BUCKET=gs://bt-challenge-your-project-id
+export PROJECT_ID=buildtrace-challenge-476923
+export BUCKET=gs://bt-challenge-buildtrace-challenge-476923
 export TOPIC_ID=bt-jobs
 ./deploy.sh
 ```
