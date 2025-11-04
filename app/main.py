@@ -12,6 +12,11 @@ TOPIC_ID   = os.environ.get("TOPIC_ID", "bt-jobs")
 BUCKET     = os.environ.get("BUCKET")  # gs://<bucket>
 SERVICE_URL= os.environ.get("SERVICE_URL")  # https://<run>/worker (for docs)
 
+# Anomaly detection thresholds (configurable)
+FAILURE_RATE_THRESHOLD = float(os.environ.get("FAILURE_RATE_THRESHOLD", "0.1"))  # 10%
+STALLED_JOBS_THRESHOLD = float(os.environ.get("STALLED_JOBS_THRESHOLD", "0.2"))  # 20%
+SPIKE_MULTIPLIER = float(os.environ.get("SPIKE_MULTIPLIER", "10.0"))  # 10x
+
 if not PROJECT_ID or not BUCKET:
     raise RuntimeError("Set env: PROJECT_ID, BUCKET (and optionally TOPIC_ID, SERVICE_URL)")
 
@@ -64,31 +69,26 @@ def health():
     jobs_running = snapshot.get("jobs_running", 0)
     jobs_success = snapshot.get("jobs_success", 0)
     
-    # Check failure rate (>10%)
     if jobs_total > 0:
         failure_rate = jobs_failed / jobs_total
-        if failure_rate > 0.1:
+        if failure_rate > FAILURE_RATE_THRESHOLD:
             alerts.append(f"High failure rate: {failure_rate*100:.1f}%")
         
-        # Check stalled jobs (>20%)
         running_rate = jobs_running / jobs_total
-        if running_rate > 0.2:
+        if running_rate > STALLED_JOBS_THRESHOLD:
             alerts.append(f"High stalled jobs: {running_rate*100:.1f}%")
     
-    # Spike detection: last job has 10x more additions than average
     if jobs_success > 0:
         total_added = snapshot.get("total_objects_added", 0)
         avg_added = total_added / jobs_success
         
-        # Find most recent completed job
         jobs = METRICS.jobs
         completed_jobs = [j for j in jobs.values() if j.get("status") == "success" and "end_time" in j]
         if completed_jobs:
-            # Sort by end_time (most recent first)
             most_recent = max(completed_jobs, key=lambda j: j.get("end_time", ""))
             last_added = most_recent.get("added_count", 0)
             
-            if avg_added > 0 and last_added > 10 * avg_added:
+            if avg_added > 0 and last_added > SPIKE_MULTIPLIER * avg_added:
                 alerts.append(f"Spike detected: last job has {last_added} additions vs {avg_added:.1f} average")
     
     success_rate = (jobs_success / jobs_total * 100) if jobs_total > 0 else 0.0

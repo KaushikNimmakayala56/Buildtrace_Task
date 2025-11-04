@@ -233,30 +233,30 @@ All valid jobs processed successfully. The single failure was due to a malformed
 
 **Future Extensions:**
 
-1. **BigQuery Integration**
+1. **Configurable Anomaly Thresholds** (IMPLEMENTED)
+   - Environment variables: `FAILURE_RATE_THRESHOLD`, `STALLED_JOBS_THRESHOLD`, `SPIKE_MULTIPLIER`
+   - Defaults: 10% failure rate, 20% stalled jobs, 10x spike multiplier
+   - Customize thresholds without code changes
+
+2. **BigQuery Integration**
    - Store metrics historically
    - Enable time-series analysis
    - Daily/hourly aggregations
 
-2. **Dead-Letter Queue**
+3. **Dead-Letter Queue**
    - Capture malformed messages
    - Enable manual investigation
    - Improve observability
 
-3. **Retry Logic**
+4. **Retry Logic**
    - Exponential backoff for transient failures
    - Configurable retry limits
    - Separate handling for permanent vs. transient errors
 
-4. **Idempotency**
+5. **Idempotency**
    - Check if result already exists before processing
    - Handle Pub/Sub message redeliveries safely
    - Prevent duplicate processing
-
-5. **Enhanced Anomaly Detection**
-   - Configurable thresholds for alerts
-   - Time-windowed spike detection
-   - Integration with monitoring systems
 
 6. **UI Dashboard**
    - Visualize metrics and health
