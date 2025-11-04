@@ -37,7 +37,10 @@ curl https://buildtrace-worker-512634476753.us-central1.run.app/metrics
 # 4. Retrieve result
 curl "https://buildtrace-worker-512634476753.us-central1.run.app/changes?drawing_id=drawing-0001"
 
-# 5. Check health
+# 5. Check DLQ status
+curl https://buildtrace-worker-512634476753.us-central1.run.app/dlq
+
+# 6. Check health
 curl https://buildtrace-worker-512634476753.us-central1.run.app/health
 ```
 
@@ -153,6 +156,7 @@ percentile_value = sorted_durations[idx]
 | `/metrics`  | GET    | Returns latency percentiles and job statistics         |
 | `/changes`  | GET    | Retrieve diff result for specific drawing              |
 | `/health`   | GET    | Health check with anomaly detection                    |
+| `/dlq`      | GET    | Check dead-letter queue status                          |
 
 **Example Requests:**
 
@@ -243,10 +247,11 @@ All valid jobs processed successfully. The single failure was due to a malformed
    - Enable time-series analysis
    - Daily/hourly aggregations
 
-3. **Dead-Letter Queue**
-   - Capture malformed messages
-   - Enable manual investigation
-   - Improve observability
+3. **Dead-Letter Queue** (IMPLEMENTED)
+   - Failed messages (after 5 retry attempts) routed to `bt-jobs-dlq` topic
+   - Worker returns 500 on errors to trigger retries
+   - View DLQ status via `GET /dlq` endpoint
+   - Prevents infinite retry loops while preserving failed messages
 
 4. **Retry Logic**
    - Exponential backoff for transient failures

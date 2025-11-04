@@ -48,6 +48,20 @@ echo ""
 echo "Deployment complete!"
 echo "Service URL: ${SERVICE_URL}"
 echo ""
-echo "To create Pub/Sub push subscription, run:"
-echo "gcloud pubsub subscriptions create bt-jobs-sub --topic ${TOPIC_ID} --push-endpoint ${SERVICE_URL}/worker --project ${PROJECT_ID}"
+echo "Creating dead-letter topic..."
+gcloud pubsub topics create ${TOPIC_ID}-dlq --project ${PROJECT_ID} || echo "DLQ topic may already exist"
+
+echo ""
+echo "Creating Pub/Sub push subscription with dead-letter queue..."
+gcloud pubsub subscriptions create bt-jobs-sub \
+    --topic ${TOPIC_ID} \
+    --push-endpoint ${SERVICE_URL}/worker \
+    --dead-letter-topic ${TOPIC_ID}-dlq \
+    --max-delivery-attempts 5 \
+    --project ${PROJECT_ID} || echo "Subscription may already exist"
+
+echo ""
+echo "Dead-letter queue configured:"
+echo "  DLQ Topic: ${TOPIC_ID}-dlq"
+echo "  Max delivery attempts: 5"
 

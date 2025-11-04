@@ -9,6 +9,7 @@ from app.metrics import METRICS
 
 PROJECT_ID = os.environ.get("PROJECT_ID")
 TOPIC_ID   = os.environ.get("TOPIC_ID", "bt-jobs")
+DLQ_TOPIC  = f"{TOPIC_ID}-dlq"
 BUCKET     = os.environ.get("BUCKET")  # gs://<bucket>
 SERVICE_URL= os.environ.get("SERVICE_URL")  # https://<run>/worker (for docs)
 
@@ -57,6 +58,22 @@ def get_changes(drawing_id: str = Query(..., description="Drawing ID to retrieve
         raise HTTPException(404, f"Results not found for drawing_id={drawing_id}")
     except Exception as e:
         raise HTTPException(500, f"Error reading results: {str(e)}")
+
+@app.get("/dlq")
+def view_dlq():
+    """Check dead-letter queue status."""
+    try:
+        dlq_path = pub.topic_path(PROJECT_ID, DLQ_TOPIC)
+        pub.get_topic(request={"topic": dlq_path})
+        return {
+            "dlq_topic": DLQ_TOPIC,
+            "status": "configured",
+            "note": "Use gcloud to view messages: gcloud pubsub subscriptions pull dlq-sub --topic bt-jobs-dlq"
+        }
+    except NotFound:
+        return JSONResponse({"status": "not_configured", "dlq_topic": DLQ_TOPIC}, status_code=404)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.get("/health")
 def health():
@@ -142,5 +159,5 @@ async def worker(request: Request):
         except Exception:
             pass
         print("Worker error:", e, traceback.format_exc(), flush=True)
-        # Return 200 so Pub/Sub doesn't redeliver forever during the challenge
-        return JSONResponse({"status": "error", "detail": str(e)}, status_code=200)
+        # Return 500 to trigger retry, then dead-letter queue after max attempts
+        return JSONResponse({"status": "error", "detail": str(e)}, status_code=500)
