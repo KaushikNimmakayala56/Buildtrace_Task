@@ -42,6 +42,9 @@ curl https://buildtrace-worker-512634476753.us-central1.run.app/dlq
 
 # 6. Check health
 curl https://buildtrace-worker-512634476753.us-central1.run.app/health
+
+# 7. View dashboard (open in browser)
+open https://buildtrace-worker-512634476753.us-central1.run.app/dashboard
 ```
 
 ## System Architecture & Data Flow
@@ -57,13 +60,15 @@ Client →  POST /process → Pub/Sub Topic → Workers (/worker) → GCS Result
 **Components:**
 
 1. **Cloud Run Service** (`buildtrace-worker`)
-   - Hosts FastAPI application with 5 endpoints
+   - Hosts FastAPI application with 7 endpoints
    - Auto-scales from 0 to 100 instances
    - Handles Pub/Sub push messages
+   - Serves real-time dashboard UI
 
 2. **Pub/Sub Topic** (`bt-jobs`)
    - Queues comparison jobs
    - Push subscription delivers messages to `/worker` endpoint
+   - Dead-letter topic (`bt-jobs-dlq`) captures failed messages after 5 retry attempts
    - Enables horizontal scaling across multiple workers
 
 3. **Cloud Storage**
@@ -89,11 +94,11 @@ Client →  POST /process → Pub/Sub Topic → Workers (/worker) → GCS Result
 
 **Fault Tolerance:**
 
-Current implementation prioritizes simplicity and stability:
-
-- Returns HTTP 200 to Pub/Sub even on errors (prevents infinite retry loops)
-- Metrics track failures separately from successes
-- Health endpoint detects anomalies (high failure rates, spikes)
+- **Dead-Letter Queue (DLQ):** Failed messages (after 5 retry attempts) are routed to `bt-jobs-dlq` topic for investigation
+- **Retry Logic:** Worker returns HTTP 500 on errors, triggering Pub/Sub automatic retries (up to 5 attempts)
+- **Metrics Tracking:** Failures tracked separately from successes for monitoring
+- **Anomaly Detection:** Health endpoint detects high failure rates, stalled jobs, and spikes in changes
+- **Configurable Thresholds:** Failure rate, stalled jobs, and spike detection thresholds are configurable via environment variables
 
 **Known Issue - "Unknown" Job:**
 
@@ -108,16 +113,15 @@ See "Production Readiness Improvements" below.
 
 **Current Trade-offs:**
 
-- Simplicity over comprehensive retry logic: transient failures (network hiccups, brief GCS outages) aren't automatically retried
-- Always returning 200 prevents infinite retry loops but doesn't handle transient failures
-- No dead-letter queue: failed jobs are logged but not persisted for analysis
+- Dead-letter queue captures failed messages, but manual investigation required
+- Pub/Sub automatic retries handle transient failures, but exponential backoff not implemented
+- Metrics are in-memory: reset on service restart (see Metrics section for details)
 
 **Production Readiness Improvements:**
 
 1. Structured logging for detailed error tracking
-2. Dead-letter queue for persistent failure analysis
-3. Exponential backoff retries for transient failures
-4. Idempotency checks to handle message redeliveries safely
+2. Exponential backoff retries (beyond Pub/Sub's automatic retries)
+3. Idempotency checks to handle message redeliveries safely
 
 ## Metrics Computation Design
 
@@ -157,6 +161,7 @@ percentile_value = sorted_durations[idx]
 | `/changes`  | GET    | Retrieve diff result for specific drawing              |
 | `/health`   | GET    | Health check with anomaly detection                    |
 | `/dlq`      | GET    | Check dead-letter queue status                          |
+| `/dashboard`| GET    | Real-time monitoring dashboard (HTML UI)                |
 
 **Example Requests:**
 
@@ -174,15 +179,21 @@ curl "https://service-url/changes?drawing_id=drawing-001"
 
 # Health check
 curl https://service-url/health
+
+# View dashboard (open in browser)
+open https://service-url/dashboard
 ```
 
 ## Deployment
 
 **Environment Variables:**
-- `PROJECT_ID`: GCP project ID
-- `BUCKET`: GCS bucket URI (e.g., `gs://bucket-name`)
+- `PROJECT_ID`: GCP project ID (required)
+- `BUCKET`: GCS bucket URI (e.g., `gs://bucket-name`) (required)
 - `TOPIC_ID`: Pub/Sub topic name (default: `bt-jobs`)
 - `SERVICE_URL`: Cloud Run service URL (for Pub/Sub push subscription)
+- `FAILURE_RATE_THRESHOLD`: Anomaly threshold for failure rate (default: 0.1 = 10%)
+- `STALLED_JOBS_THRESHOLD`: Anomaly threshold for stalled jobs (default: 0.2 = 20%)
+- `SPIKE_MULTIPLIER`: Multiplier for spike detection (default: 10.0 = 10x)
 
 **Deploy Script:**
 ```bash
@@ -193,15 +204,17 @@ The script:
 1. Builds Docker image using Cloud Build
 2. Pushes to Google Container Registry
 3. Deploys to Cloud Run with configured settings
-4. Outputs service URL and Pub/Sub subscription command
+4. Creates dead-letter topic (`bt-jobs-dlq`)
+5. Creates/updates Pub/Sub subscription with DLQ configuration
+6. Outputs service URL
 
-**Post-Deployment:**
-```bash
-gcloud pubsub subscriptions create bt-jobs-sub \
-  --topic bt-jobs \
-  --push-endpoint https://your-service-url/worker \
-  --project $PROJECT_ID
-```
+**Deployment Configuration:**
+- Min instances: 0 (scales to zero when idle)
+- Max instances: 100
+- Concurrency: 10 requests per instance
+- Memory: 512Mi
+- Timeout: 300s
+- Dead-letter queue: Enabled (max 5 delivery attempts)
 
 ## Performance Results
 
@@ -263,7 +276,10 @@ All valid jobs processed successfully. The single failure was due to a malformed
    - Handle Pub/Sub message redeliveries safely
    - Prevent duplicate processing
 
-6. **UI Dashboard**
-   - Visualize metrics and health
-   - View recent job results
-   - Configure alert thresholds
+6. **UI Dashboard** (IMPLEMENTED)
+   - Real-time monitoring dashboard at `/dashboard` endpoint
+   - Auto-refreshes every 5 seconds
+   - Displays system health, latency metrics, job statistics, and object changes
+   - Professional UI with gradient design, glassmorphism cards, and animations
+   - Mobile responsive
+   - Connects to deployed API for live data visualization
