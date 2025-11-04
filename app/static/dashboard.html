@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BuildTrace Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #fff;
+            color: #000;
+            padding: 20px;
+            line-height: 1.5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        .last-updated {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 20px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .card {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 16px;
+        }
+        .card-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        table td {
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        table td:first-child {
+            color: #666;
+            font-weight: 500;
+        }
+        table td:last-child {
+            text-align: right;
+            font-family: 'Courier New', monospace;
+            color: #0066cc;
+            font-weight: 600;
+        }
+        table tr:last-child td {
+            border-bottom: none;
+        }
+        .status-healthy {
+            color: #0066cc;
+        }
+        .status-degraded {
+            color: #cc0000;
+        }
+        .alerts {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #eee;
+        }
+        .alert {
+            font-size: 12px;
+            color: #cc0000;
+            margin-top: 4px;
+        }
+        .loading {
+            color: #999;
+            font-style: italic;
+        }
+        .error {
+            color: #cc0000;
+            font-size: 14px;
+        }
+        @media (max-width: 768px) {
+            body {
+                padding: 12px;
+            }
+            .grid {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+            h1 {
+                font-size: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>BuildTrace Dashboard</h1>
+        <div class="last-updated" id="lastUpdated">Loading...</div>
+        
+        <div class="grid">
+            <div class="card">
+                <div class="card-title">System Health</div>
+                <div id="healthContent" class="loading">Loading...</div>
+            </div>
+            
+            <div class="card">
+                <div class="card-title">Latency</div>
+                <table id="latencyTable">
+                    <tr><td>p50</td><td class="loading">—</td></tr>
+                    <tr><td>p95</td><td class="loading">—</td></tr>
+                    <tr><td>p99</td><td class="loading">—</td></tr>
+                </table>
+            </div>
+            
+            <div class="card">
+                <div class="card-title">Job Stats</div>
+                <table id="jobsTable">
+                    <tr><td>Total</td><td class="loading">—</td></tr>
+                    <tr><td>Success</td><td class="loading">—</td></tr>
+                    <tr><td>Failed</td><td class="loading">—</td></tr>
+                    <tr><td>Running</td><td class="loading">—</td></tr>
+                </table>
+            </div>
+            
+            <div class="card">
+                <div class="card-title">Changes</div>
+                <table id="changesTable">
+                    <tr><td>Added</td><td class="loading">—</td></tr>
+                    <tr><td>Removed</td><td class="loading">—</td></tr>
+                    <tr><td>Moved</td><td class="loading">—</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        
+        function formatNumber(num) {
+            if (num === null || num === undefined) return '—';
+            if (typeof num === 'number') {
+                if (num >= 1000) return num.toLocaleString();
+                if (num % 1 !== 0) return num.toFixed(2);
+                return num.toString();
+            }
+            return num;
+        }
+        
+        function formatTime(ms) {
+            if (ms === null || ms === undefined) return '—';
+            return `${formatNumber(ms)} ms`;
+        }
+        
+        function updateHealth(data) {
+            const container = document.getElementById('healthContent');
+            if (!data || data.error) {
+                container.innerHTML = `<div class="error">Error loading health data</div>`;
+                return;
+            }
+            
+            const status = data.status || 'unknown';
+            const statusClass = status === 'healthy' ? 'status-healthy' : 'status-degraded';
+            const summary = data.metrics_summary || {};
+            
+            let html = `<table>
+                <tr><td>Status</td><td class="${statusClass}">${status.toUpperCase()}</td></tr>
+                <tr><td>Total Jobs</td><td>${formatNumber(summary.total_jobs)}</td></tr>
+                <tr><td>Success Rate</td><td>${summary.success_rate || '—'}</td></tr>
+                <tr><td>p99 Latency</td><td>${formatTime(summary.p99_latency_ms)}</td></tr>
+            </table>`;
+            
+            if (data.alerts && data.alerts.length > 0) {
+                html += `<div class="alerts">`;
+                data.alerts.forEach(alert => {
+                    html += `<div class="alert">⚠ ${alert}</div>`;
+                });
+                html += `</div>`;
+            }
+            
+            container.innerHTML = html;
+        }
+        
+        function updateMetrics(data) {
+            if (!data || data.error) {
+                document.getElementById('latencyTable').innerHTML = '<tr><td colspan="2" class="error">Error loading metrics</td></tr>';
+                return;
+            }
+            
+            // Latency
+            const latencyTable = document.getElementById('latencyTable');
+            latencyTable.innerHTML = `
+                <tr><td>p50</td><td>${formatTime(data.p50 * 1000)}</td></tr>
+                <tr><td>p95</td><td>${formatTime(data.p95 * 1000)}</td></tr>
+                <tr><td>p99</td><td>${formatTime(data.p99 * 1000)}</td></tr>
+            `;
+            
+            // Jobs
+            const jobsTable = document.getElementById('jobsTable');
+            jobsTable.innerHTML = `
+                <tr><td>Total</td><td>${formatNumber(data.jobs_total)}</td></tr>
+                <tr><td>Success</td><td>${formatNumber(data.jobs_success)}</td></tr>
+                <tr><td>Failed</td><td>${formatNumber(data.jobs_failed)}</td></tr>
+                <tr><td>Running</td><td>${formatNumber(data.jobs_running)}</td></tr>
+            `;
+            
+            // Changes
+            const changesTable = document.getElementById('changesTable');
+            changesTable.innerHTML = `
+                <tr><td>Added</td><td>${formatNumber(data.total_objects_added)}</td></tr>
+                <tr><td>Removed</td><td>${formatNumber(data.total_objects_removed)}</td></tr>
+                <tr><td>Moved</td><td>${formatNumber(data.total_objects_moved)}</td></tr>
+            `;
+        }
+        
+        function updateTimestamp() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString();
+            document.getElementById('lastUpdated').textContent = `Last updated: ${timeStr}`;
+        }
+        
+        async function fetchData() {
+            try {
+                const [metricsRes, healthRes] = await Promise.all([
+                    fetch(`${API_BASE}/metrics`),
+                    fetch(`${API_BASE}/health`)
+                ]);
+                
+                const metrics = await metricsRes.json();
+                const health = await healthRes.json();
+                
+                updateMetrics(metrics);
+                updateHealth(health);
+                updateTimestamp();
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                document.getElementById('lastUpdated').textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        // Initial load
+        fetchData();
+        
+        // Update every 5 seconds
+        setInterval(fetchData, 5000);
+    </script>
+</body>
+</html>
+

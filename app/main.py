@@ -1,7 +1,8 @@
 import os, json, uuid, traceback
 from typing import Dict, Any, List
 from fastapi import FastAPI, Request, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from google.cloud import storage, pubsub_v1
 from google.api_core.exceptions import NotFound
 from app.diff import diff
@@ -22,6 +23,12 @@ if not PROJECT_ID or not BUCKET:
     raise RuntimeError("Set env: PROJECT_ID, BUCKET (and optionally TOPIC_ID, SERVICE_URL)")
 
 app = FastAPI(title="BuildTrace Challenge")
+
+# Mount static files for dashboard
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
 gcs = storage.Client()
 pub = pubsub_v1.PublisherClient()
 topic_path = pub.topic_path(PROJECT_ID, TOPIC_ID)
@@ -42,6 +49,11 @@ def write_json_gcs(gs_uri: str, payload: Any):
     bkt, path = parse_gs_uri(gs_uri)
     blob = gcs.bucket(bkt).blob(path)
     blob.upload_from_string(json.dumps(payload, ensure_ascii=False), content_type="application/json")
+
+@app.get("/dashboard")
+def dashboard():
+    """Redirect to dashboard HTML page."""
+    return RedirectResponse(url="/static/dashboard.html")
 
 @app.get("/metrics")
 def metrics():
